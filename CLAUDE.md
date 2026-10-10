@@ -50,3 +50,7 @@ Conventions that are easy to break:
 ## Tests
 
 Vitest in `test/`; `fixtures.ts` holds the Northwind-style schema and rows every test uses. `memory` is the provider to test against; the `http` tests inject a fake `fetch` through `HttpOpts.fetch`.
+
+## Next work
+
+`ROADMAP.md` holds the milestone plan (M1 ship v0.1.0 with CI first). Pick the next unchecked item there; keep the principles at its end.

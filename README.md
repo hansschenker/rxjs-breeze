@@ -296,6 +296,10 @@ In this version: queries, three interpreters, the identity-map cache with change
 
 Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), and case-insensitive local comparison. Open an issue if one of these matters to you.
 
+## Roadmap
+
+The milestones for the rest of the Breeze feature set, with scope and acceptance criteria, are in [ROADMAP.md](./ROADMAP.md).
+
 ## Acknowledgements
 
 The design is derived from Breeze.js by IdeaBlade, released under the MIT license. rxjs-breeze is an independent reimplementation and is not affiliated with IdeaBlade.
