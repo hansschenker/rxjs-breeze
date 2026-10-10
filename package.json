@@ -1,0 +1,46 @@
+{
+  "name": "rxjs-breeze",
+  "version": "0.1.0",
+  "description": "Breeze.js ideas rebuilt with RxJS and TypeScript: queries as data, a LINQ-style provider model, an identity-map cache with change tracking, and reactive local queries.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "rxjs",
+    "breeze",
+    "linq",
+    "query",
+    "odata",
+    "cache",
+    "change-tracking"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hansschenker/rxjs-breeze.git"
+  },
+  "peerDependencies": {
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "rxjs": "^7.8.2",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
