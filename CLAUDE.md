@@ -18,6 +18,8 @@ npm run build                              # tsup -> dist/index.js + index.d.ts
 
 Done means typecheck, tests and build all pass. ESM only, npm only (package-lock.json), rxjs is a peer dependency.
 
+The build runs tsup for JavaScript and then `tsc -p tsconfig.build.json` for declarations. Do not switch back to `tsup --dts`: this project uses TypeScript 7 (the native compiler), which lacks the JS API that tsup's declaration plugin needs, and it crashes with `Cannot read properties of undefined (reading 'useCaseSensitiveFileNames')`.
+
 ## Architecture
 
 Four layers, each a module boundary; dependencies only point downwards in this list:
