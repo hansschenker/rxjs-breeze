@@ -140,3 +140,7 @@ export const fkRefs = (s: Schema): FkRef[] => {
   }
   return out;
 };
+
+/** True for temporary keys assigned by `store.add`: negative numbers or `tmp_` strings. */
+export const isTemp = (k: unknown): boolean =>
+  (typeof k === 'number' && k < 0) || (typeof k === 'string' && k.startsWith('tmp_'));

@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "example": "node examples/northwind.mjs"
+    "example": "node examples/northwind.mjs",
+    "example:trippin": "node examples/trippin.mjs"
   },
   "keywords": [
     "rxjs",

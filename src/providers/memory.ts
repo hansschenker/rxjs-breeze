@@ -3,15 +3,13 @@ import { type Cache, type Row, type Saved, detach, empty, live, merge, put, sele
 import { run } from '../interp/fn';
 import type { Page, Provider } from '../provider';
 import type { Query } from '../query';
-import { type Key, type Schema, asKey, fkRefs, keyId, keyOf, keyProps, props, sameKey } from '../schema';
+import { type Key, type Schema, fkRefs, isTemp, keyOf, keyProps, props, sameKey } from '../schema';
+import { ref, remap } from './keys';
 
 export interface Memory extends Provider {
   readonly rows: <T extends object = object>(type: string) => T[];
   readonly cache: () => Cache;
 }
-
-const isTemp = (k: unknown): boolean =>
-  (typeof k === 'number' && k < 0) || (typeof k === 'string' && k.startsWith('tmp_'));
 
 /**
  * An in-memory provider. Queries run through the compiled-function
@@ -45,19 +43,10 @@ export const memory = (s: Schema, seed: Readonly<Record<string, readonly object[
         const [kp] = keyProps(s, r.type);
         if (r.state !== 'added' || !kp || !isTemp(data[kp])) return { r, data };
         const real = typeof data[kp] === 'number' ? next++ : `k${next++}`;
-        keyed.set(`${r.type}:${keyId(r.key)}`, real);
+        keyed.set(ref(r.type, r.key), real);
         return { r, data: { ...data, [kp]: real } };
       });
-      items = items.map(({ r, data }) => ({
-        r,
-        data: refs
-          .filter((x) => x.type === r.type)
-          .reduce((d, x) => {
-            const fk = asKey(d[x.fk]);
-            const real = fk === undefined ? undefined : keyed.get(`${x.to}:${keyId(fk)}`);
-            return real === undefined ? d : { ...d, [x.fk]: real };
-          }, data),
-      }));
+      items = items.map(({ r, data }) => ({ r, data: remap(refs, keyed, r.type, data) }));
       const saved: { type: string; data: object; was?: Key }[] = [];
       const removed: { type: string; key: Key }[] = [];
       for (const { r, data } of items) {

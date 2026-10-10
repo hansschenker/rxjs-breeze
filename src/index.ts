@@ -21,3 +21,4 @@ export * from './store';
 export * from './provider';
 export * from './providers/http';
 export * from './providers/memory';
+export * from './providers/odata';
