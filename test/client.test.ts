@@ -89,15 +89,19 @@ describe('http provider', () => {
     const calls: string[] = [];
     const fake: typeof fetch = async (input, init) => {
       calls.push(`${init?.method ?? 'GET'} ${String(input)}`);
-      return new Response(JSON.stringify({ value: [{ id: 1, name: 'A', city: 'B' }], '@odata.count': 1 }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          value: [{ id: 1, name: 'A', city: 'B', since: '2024-01-05T00:00:00.000Z' }],
+          '@odata.count': 1,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
     };
     const db = client(store(nw), http('https://api.test/odata/', { fetch: fake }));
     const p = await firstValueFrom(db.page(query<Customer>('Customer', where(eq('city', 'B')), count())));
     expect(p.count).toBe(1);
     expect(p.rows[0]?.name).toBe('A');
+    expect((p.rows[0] as { since?: unknown } | undefined)?.since).toBeInstanceOf(Date);
     expect(calls).toEqual(["GET https://api.test/odata/Customer?$filter=city%20eq%20'B'&$count=true"]);
   });
 

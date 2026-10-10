@@ -1,5 +1,6 @@
 import { defer, from, map, type Observable } from 'rxjs';
 import type { Row, Saved } from '../cache';
+import { revive } from '../interp/json';
 import { toOData } from '../interp/odata';
 import type { Page, Provider } from '../provider';
 import type { Query } from '../query';
@@ -14,9 +15,11 @@ export interface HttpOpts {
   readonly fetch?: typeof globalThis.fetch;
 }
 
+/** Parse a JSON body, turning ISO date strings into Dates. */
 const body = async (res: Response): Promise<unknown> => {
   if (!res.ok) throw new Error(`rxjs-breeze: ${res.status} ${res.statusText}`);
-  return res.json();
+  const text = await res.text();
+  return text === '' ? null : (JSON.parse(text, revive) as unknown);
 };
 
 const list = (o: Record<string, unknown>): unknown[] => {

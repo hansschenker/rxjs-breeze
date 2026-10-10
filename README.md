@@ -82,6 +82,12 @@ db.store.add<Partial<Order>>('Order', { customerId: 1, total: 5 });
 db.save().subscribe();
 ```
 
+To see it against a real datasource, `examples/northwind.mjs` queries the public Northwind OData v4 service, expands navigations, and re-runs the same query from the cache:
+
+```bash
+npm run build && npm run example
+```
+
 Query operators compose with RxJS `pipe` too, since each one is a unary function:
 
 ```ts
