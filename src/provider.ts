@@ -1,7 +1,8 @@
-import { map, of, tap, type Observable } from 'rxjs';
+import { map, of, tap, throwError, type Observable } from 'rxjs';
 import type { Merge, Row, Saved } from './cache';
 import type { Query } from './query';
 import type { Store } from './store';
+import { invalid, validate } from './validate';
 
 /** One page of results, with the total count when the query asked for it. */
 export interface Page<T> {
@@ -26,6 +27,11 @@ export interface FetchOpts {
   readonly merge?: Merge;
 }
 
+export interface SaveOpts {
+  /** Validate rows before sending; the save errors with `Invalid` when issues are found. Default true. */
+  readonly validate?: boolean;
+}
+
 /** A store wired to a provider: fetch merges results into the store, save sends its changes. */
 export interface Client {
   readonly store: Store;
@@ -33,7 +39,7 @@ export interface Client {
   readonly page: <T extends object>(q: Query<T>, opts?: FetchOpts) => Observable<Page<T>>;
   readonly fetch: <T extends object>(q: Query<T>, opts?: FetchOpts) => Observable<T[]>;
   /** Save the given rows, or every pending change. */
-  readonly save: (rows?: readonly Row[]) => Observable<Saved>;
+  readonly save: (rows?: readonly Row[], opts?: SaveOpts) => Observable<Saved>;
 }
 
 export const client = (store: Store, provider: Provider): Client => {
@@ -55,9 +61,15 @@ export const client = (store: Store, provider: Provider): Client => {
     provider,
     page,
     fetch: (q, opts) => page(q, opts).pipe(map((p) => [...p.rows])),
-    save: (rows = store.changes()) =>
-      rows.length === 0
-        ? of<Saved>({ rows: [] })
-        : provider.save(rows).pipe(tap((saved) => store.accept(rows, saved))),
+    save: (rows = store.changes(), { validate: check = true }: SaveOpts = {}) => {
+      if (rows.length === 0) return of<Saved>({ rows: [] });
+      if (check) {
+        const found = rows
+          .filter((r) => r.state !== 'removed')
+          .flatMap((r) => validate(store.schema)(r.type, r.data));
+        if (found.length > 0) return throwError(() => invalid(found));
+      }
+      return provider.save(rows).pipe(tap((saved) => store.accept(rows, saved)));
+    },
   };
 };

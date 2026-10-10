@@ -29,6 +29,8 @@ Four layers, each a module boundary; dependencies only point downwards in this l
 3. **Cache**: `src/cache.ts` is pure (`Cache -> Cache` functions: `put`, `patch`, `drop`, `revert`, `merge`, `fill`, `select`, `accept`, snapshots). `src/store.ts` is the only stateful file: one `BehaviorSubject<Cache>` plus `watch`/`changes$` derived with `distinctUntilChanged`. Put new behaviour in `cache.ts` as a pure function and expose it through the store.
 4. **Providers**: `src/provider.ts` defines `Provider` (`query`, `save`) and `client` (fetch merges into the store, save calls `accept`). `src/providers/memory.ts` is an in-process server built on the same cache functions; `src/providers/http.ts` is GET-by-URL plus POST-save.
 
+**Validation** sits beside the cache: `src/rules.ts` has `Rule`/`Ctx` and the built-in rule constructors; `src/validate.ts` derives `Issue[]` from a type's `props` kinds, `rules` and `checks`. Issues are never stored. The store computes them on demand (`issues`, `issues$`) and `client.save` errors with `invalid(issues)` unless called with `{ validate: false }`.
+
 Conventions that are easy to break:
 
 - Public generics are `T extends object` (plain interfaces must work). Read properties through `props(x)[k]`, never by casting to `any`.

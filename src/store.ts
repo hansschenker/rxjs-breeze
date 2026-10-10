@@ -21,6 +21,7 @@ import {
 } from './cache';
 import type { Query } from './query';
 import { type Key, type Schema, hasKey, keyId, keyKind, keyOf, keyProps } from './schema';
+import { type Issue, issues as findIssues } from './validate';
 
 /**
  * The reactive shell around the pure cache: one BehaviorSubject holding the
@@ -47,6 +48,10 @@ export interface Store {
   /** Run a query against the cache and re-run it whenever the cache changes. */
   readonly watch: <T extends object>(q: Query<T>) => Observable<T[]>;
   readonly changes: () => Row[];
+  /** Validation issues for pending rows, or for one entity regardless of its state. */
+  readonly issues: (type?: string, key?: Key) => Issue[];
+  /** Validation issues for pending rows as a stream. */
+  readonly issues$: Observable<readonly Issue[]>;
   readonly revert: (type?: string, key?: Key) => void;
   /** Merge server data; returns the entities now in the cache, filled along `navs`. */
   readonly merge: <T extends object>(
@@ -144,6 +149,11 @@ export const store = (s: Schema, init: Cache = empty): Store => {
         distinctUntilChanged<T[]>(sameList),
       ),
     changes: () => dirty(state.value),
+    issues: (t, key) => findIssues(s)(state.value, t, key),
+    issues$: state.pipe(
+      map((c) => findIssues(s)(c)),
+      distinctUntilChanged<Issue[]>(sameList),
+    ),
     revert: (t, key) => update((c) => revert(c, t, key)),
     merge: <T extends object>(
       t: string,

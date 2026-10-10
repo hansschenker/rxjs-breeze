@@ -1,3 +1,5 @@
+import type { Rule } from './rules';
+
 export type Kind = 'string' | 'number' | 'boolean' | 'date';
 
 /**
@@ -15,6 +17,10 @@ export interface Type {
   readonly key: string | readonly string[];
   readonly props?: Readonly<Record<string, Kind>>;
   readonly navs?: Readonly<Record<string, Nav>>;
+  /** Property rules, keyed by property name. */
+  readonly rules?: Readonly<Record<string, readonly Rule[]>>;
+  /** Entity-level rules; they receive the whole entity. */
+  readonly checks?: readonly Rule[];
 }
 
 export type Schema = Readonly<Record<string, Type>>;

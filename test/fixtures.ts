@@ -1,3 +1,4 @@
+import { maxLen, min, required, rule } from '../src/rules';
 import { schema } from '../src/schema';
 
 export const nw = schema({
@@ -5,6 +6,7 @@ export const nw = schema({
     key: 'id',
     props: { id: 'number', name: 'string', city: 'string' },
     navs: { orders: { to: 'Order', fk: 'customerId', many: true } },
+    rules: { name: [required(), maxLen(40)], city: [required()] },
   },
   Order: {
     key: 'id',
@@ -13,6 +15,14 @@ export const nw = schema({
       customer: { to: 'Customer', fk: 'customerId' },
       lines: { to: 'Line', fk: 'orderId', many: true },
     },
+    rules: { total: [min(0)] },
+    checks: [
+      rule<Order>('not-future', (_, { entity }) =>
+        entity.placed instanceof Date && entity.placed.getTime() > Date.now()
+          ? 'placed cannot be in the future'
+          : null,
+      ),
+    ],
   },
   Line: {
     key: ['orderId', 'productId'],

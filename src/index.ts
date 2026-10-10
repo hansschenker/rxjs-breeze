@@ -8,6 +8,10 @@ export { compare, get, run, toFn } from './interp/fn';
 export { toFilter, toOData } from './interp/odata';
 export { fromJson, revive, toJson } from './interp/json';
 
+// Validation: rules on the schema, issues derived on demand
+export * from './rules';
+export * from './validate';
+
 // Pure cache and its reactive shell
 export * from './cache';
 export * from './store';

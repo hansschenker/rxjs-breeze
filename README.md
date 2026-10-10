@@ -120,12 +120,21 @@ Breeze's vocabulary, and what it became here.
 | `MetadataStore` / `EntityType` / `NavigationProperty` | `schema({ Type: { key, props, navs } })` |
 | `KeyGenerator` temporary keys | negative numbers (or `tmp_n`) from `add`, replaced by `accept` after save |
 | `entityChanged` / `hasChangesChanged` events | `state$` / `changes$` |
+| `Validator.required` / `maxLength` / `stringLength` / `int` / `regex` / `emailAddress` / `url` | `required()` / `maxLen(n)` / `minLen(n)` / `int()` / `pattern(re)` / `email()` / `url()` |
+| `DataType` validators (number, date, bool) | `ofKind(kind)`, applied automatically from `props` |
+| `new Validator(name, fn)` | `rule(name, (value, ctx) => message \| null)` |
+| `DataProperty.validators` / `EntityType.validators` | `rules: { prop: [...] }` / `checks: [...]` on the schema type |
+| `entityAspect.validateEntity()` / `getValidationErrors()` | `store.issues(type, key)` / `store.issues()` |
+| `validationErrorsChanged` event | `store.issues$` |
+| `ValidationOptions.validateOnSave` | `client.save(rows, { validate: false })` to skip |
+| `ValidationError` | `Issue`; a refused save errors with `Invalid` (`isInvalid(err)`, `err.issues`) |
 
 ## Layers
 
 ```
 src/pred.ts, query.ts     queries as data: predicate tree, query value, operators
 src/interp/               interpreters: fn (local), odata and json (wire)
+src/rules.ts, validate.ts validation: rule constructors, issues derived from schema + entity
 src/cache.ts              the pure core: Cache -> Cache functions, no state
 src/store.ts              the reactive shell: one BehaviorSubject around the cache
 src/provider.ts           Provider and Client: fetch merges, save accepts
@@ -138,6 +147,39 @@ Rules the code follows:
 - Property paths are `keyof T` with autocomplete, but any dotted string is accepted (`'customer.city'`).
 - Everything in `cache.ts` is a pure function; the store only applies them and emits.
 - Incoming data with nested navigations is normalized into one row per entity. Navigations are filled back in on read along `expand` paths, and resolved on the fly when a filter or ordering uses one.
+
+## Validation
+
+Rules are pure functions attached to the schema. Kind checks come from `props` for free; add `rules` per property and `checks` for the whole entity:
+
+```ts
+import { email, maxLen, min, required, rule, schema } from 'rxjs-breeze';
+
+const nw = schema({
+  Customer: {
+    key: 'id',
+    props: { id: 'number', name: 'string', email: 'string' },
+    rules: { name: [required(), maxLen(40)], email: [email()] },
+  },
+  Order: {
+    key: 'id',
+    props: { id: 'number', customerId: 'number', total: 'number', placed: 'date' },
+    rules: { total: [min(0)] },
+    checks: [
+      rule<Order>('not-future', (_, { entity }) =>
+        entity.placed.getTime() > Date.now() ? 'placed cannot be in the future' : null,
+      ),
+    ],
+  },
+});
+```
+
+Issues are derived, never stored. `store.issues()` validates the pending rows now, `store.issues$` streams them as they change, and `client.save` refuses to send invalid rows by erroring with an `Invalid` that carries the `issues`. Pass `{ validate: false }` to skip the check.
+
+```ts
+db.store.issues$.subscribe((issues) => showErrors(issues));
+db.save().subscribe({ error: (e) => (isInvalid(e) ? showErrors(e.issues) : rethrow(e)) });
+```
 
 ## Writing a provider
 
@@ -154,9 +196,9 @@ const mine: Provider = {
 
 ## Scope
 
-In this first version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, an in-memory provider and an OData-flavoured HTTP provider.
+In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, validation rules with save-time enforcement, an in-memory provider and an OData-flavoured HTTP provider.
 
-Not yet: validation rules, complex types, inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
+Not yet: complex types, inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
 
 ## Acknowledgements
 
