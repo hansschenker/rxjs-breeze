@@ -15,9 +15,10 @@ import { createServer } from 'node:http';
 import { firstValueFrom, tap } from 'rxjs';
 import type { Row } from './cache';
 import { fromJson, revive } from './interp/json';
+import { type Naming, renameData, renameQuery, renameRow, same } from './naming';
 import type { Provider } from './provider';
 import type { Memory } from './providers/memory';
-import { query } from './query';
+import { type Query, query } from './query';
 import { type Schema, isComplex } from './schema';
 
 export interface Req {
@@ -37,6 +38,8 @@ export interface HandleOpts {
   readonly base?: string;
   /** Allowed CORS origin; `false` sends no CORS headers. Default "*". */
   readonly cors?: string | false;
+  /** Property-name convention on the wire: names are exposed as `toServer(name)`. Defaults to `same`. */
+  readonly naming?: Naming;
 }
 
 export interface ServeOpts extends HandleOpts {
@@ -71,6 +74,12 @@ export const handle = (provider: Provider, opts: HandleOpts = {}): ((req: Req) =
     body: JSON.stringify(body),
   });
   const fail = (status: number, message: string): Res => reply(status, { error: { message } });
+  const n = opts.naming ?? same;
+  const outbound = renameData(n.toServer);
+  const page = async (q: Query<object>): Promise<Res> => {
+    const p = await firstValueFrom(provider.query(renameQuery(n.toClient)(q)));
+    return reply(200, { ...p, rows: p.rows.map((r) => outbound(r)) });
+  };
 
   return async (req: Req): Promise<Res> => {
     const u = new URL(req.url, 'http://local');
@@ -83,11 +92,9 @@ export const handle = (provider: Provider, opts: HandleOpts = {}): ((req: Req) =
         const q = u.searchParams.get('q');
         const type = path.slice(1);
         if (!q && !type) return fail(404, 'expected /Type or ?q=');
-        return reply(200, await firstValueFrom(provider.query(q ? fromJson<object>(q) : query<object>(type))));
+        return await page(q ? fromJson<object>(q) : query<object>(type));
       }
-      if (method === 'POST' && path === '/query') {
-        return reply(200, await firstValueFrom(provider.query(fromJson<object>(req.body ?? ''))));
-      }
+      if (method === 'POST' && path === '/query') return await page(fromJson<object>(req.body ?? ''));
       if (method === 'POST' && path === '/save') {
         const raw: unknown = JSON.parse(req.body ?? '', revive);
         const rows =
@@ -95,7 +102,8 @@ export const handle = (provider: Provider, opts: HandleOpts = {}): ((req: Req) =
             ? (raw as { rows: unknown[] }).rows
             : null;
         if (!rows || !rows.every(isRow)) return fail(400, 'expected { rows: Row[] }');
-        return reply(200, await firstValueFrom(provider.save(rows)));
+        const saved = await firstValueFrom(provider.save(rows.map(renameRow(n.toClient))));
+        return reply(200, { ...saved, rows: saved.rows.map((x) => ({ ...x, data: outbound(x.data) })) });
       }
       return fail(404, `no route for ${method} ${path}`);
     } catch (e) {

@@ -118,6 +118,7 @@ Breeze's vocabulary, and what it became here.
 | `dataService` adapter (`webApi`, `webApiOData`, `mongo`) | `Provider`: `http`, `odata`, `memory`, or your own |
 | OData adapter `$batch` changesets with Content-ID references | `odata(..., { batch: 'multipart' \| 'json' })`, new parents bound with `nav@odata.bind: "$n"` |
 | Server packages (`breeze-sequelize`, `breeze-mongodb`, `Breeze.ContextProvider`) | `serve(provider)` from `rxjs-breeze/server`, with `memory` or your own `Provider` |
+| `NamingConvention.camelCase` / `.none` / `new NamingConvention({...})` | `naming: camel` / `same` / `naming(toServer, toClient)` on `http`, `odata` and `serve` |
 | `ajax` adapter | the `fetch` option of `http` |
 | `modelLibrary` adapter (`ko`, `backbone`, `backingStore`) | RxJS: `store.watch`, `state$`, `changes$` |
 | `EntityManager` | `store` |
@@ -235,6 +236,20 @@ db.save().subscribe({ error: (e) => (isInvalid(e) ? showErrors(e.issues) : rethr
 npm run build && npm run example:trippin
 ```
 
+## Naming conventions
+
+The schema and the store always use your names. When the server spells them differently, give the provider a convention and it renames at the wire: query paths, bodies, key paths and `@odata.bind` targets on the way out, response keys on the way in.
+
+```ts
+import { camel, naming, snake } from 'rxjs-breeze';
+
+odata(nw, base, { naming: camel });             // name <-> Name, Breeze's NamingConvention.camelCase
+http(base, { url: toJsonUrl, naming: snake });  // shipCity <-> ship_city
+naming((n) => n.toUpperCase(), (n) => n.toLowerCase()); // your own pair of functions
+```
+
+Type names are not renamed; map those with `sets`. The reference server takes the same option to expose server-style names: `serve(provider, { naming: camel })`.
+
 ## Reference JSON server
 
 Any `Provider` can be served over HTTP with the Node-only entry `rxjs-breeze/server`. It speaks the JSON wire format the `http` client provider produces with `url: toJsonUrl`, so a JSON backend needs no OData and no query parser of its own:
@@ -277,9 +292,9 @@ const mine: Provider = {
 
 ## Scope
 
-In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for JSON servers, an OData v4 provider that reads and writes, per request or as one atomic `$batch` changeset, and a reference JSON server that exposes any provider over HTTP.
+In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for JSON servers, an OData v4 provider that reads and writes, per request or as one atomic `$batch` changeset, a reference JSON server that exposes any provider over HTTP, and naming conventions at the wire.
 
-Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, and case-insensitive local comparison. Open an issue if one of these matters to you.
+Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), and case-insensitive local comparison. Open an issue if one of these matters to you.
 
 ## Acknowledgements
 

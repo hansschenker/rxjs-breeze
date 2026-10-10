@@ -16,6 +16,7 @@ import {
   props,
   sameKey,
 } from '../schema';
+import { renameData, same } from '../naming';
 import { type BatchReq, buildJson, buildMultipart, parseJson, parseMultipart } from './batch';
 import { type HttpOpts, http } from './http';
 import { pointsAt, ref, remap, topo } from './keys';
@@ -36,31 +37,42 @@ export interface ODataOpts extends Omit<HttpOpts, 'url' | 'savePath'> {
 const lit = (v: string | number): string =>
   typeof v === 'number' ? String(v) : `'${v.replace(/'/g, "''")}'`;
 
-/** `(10)`, `('ALFKI')` or `(OrderID=10,ProductID=1)`. */
-const keyPath = (s: Schema, t: string, key: Key): string => {
+/** `(10)`, `('ALFKI')` or `(OrderID=10,ProductID=1)`, with key property names in server spelling. */
+const keyPath = (s: Schema, t: string, key: Key, toServer: (name: string) => string): string => {
   if (typeof key !== 'object') return `(${lit(key)})`;
   const parts = keyProps(s, t).map((p, i) => {
     const v = key[i];
     if (v === undefined) throw new Error(`rxjs-breeze: incomplete key for ${t}`);
-    return `${p}=${lit(v)}`;
+    return `${toServer(p)}=${lit(v)}`;
   });
   return `(${parts.join(',')})`;
 };
 
-/** Drop `@odata.*` annotations and undefined values, recursively. */
+/** Outgoing: drop undefined values, recursively. Bind keys (`nav@odata.bind`) must survive. */
 const clean = (v: unknown): unknown => {
   if (Array.isArray(v)) return v.map((x) => clean(x));
   if (v === null || typeof v !== 'object' || v instanceof Date) return v;
   return Object.fromEntries(
     Object.entries(v as Data)
-      .filter(([k, x]) => !k.startsWith('@') && x !== undefined)
+      .filter(([, x]) => x !== undefined)
       .map(([k, x]) => [k, clean(x)]),
+  );
+};
+
+/** Incoming: drop `@odata.*` annotations, bare or per-property, recursively. */
+const strip = (v: unknown): unknown => {
+  if (Array.isArray(v)) return v.map((x) => strip(x));
+  if (v === null || typeof v !== 'object' || v instanceof Date) return v;
+  return Object.fromEntries(
+    Object.entries(v as Data)
+      .filter(([k]) => !k.startsWith('@') && !k.includes('@odata.'))
+      .map(([k, x]) => [k, strip(x)]),
   );
 };
 
 const parse = (text: string): Data | null => {
   if (text.trim() === '') return null;
-  const raw = clean(JSON.parse(text, revive));
+  const raw = strip(JSON.parse(text, revive));
   return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Data) : null;
 };
 
@@ -85,6 +97,12 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
   const refs = fkRefs(s);
   const json = { accept: 'application/json', 'content-type': 'application/json', prefer: 'return=representation' };
   const headers = { ...json, ...opts.headers };
+  const n = opts.naming ?? same;
+  const outbound = (body: Data): unknown => renameData(n.toServer)(clean(body));
+  const inbound = (text: string): Data | null => {
+    const d = parse(text);
+    return d === null ? null : (renameData(n.toClient)(d) as Data);
+  };
 
   const plan = (rows: readonly Row[]) => ({
     added: topo(
@@ -99,7 +117,7 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
   });
 
   const url = (r: Row): string =>
-    `${root}/${set(r.type)}${r.state === 'added' ? '' : keyPath(s, r.type, r.key)}`;
+    `${root}/${set(r.type)}${r.state === 'added' ? '' : keyPath(s, r.type, r.key, n.toServer)}`;
 
   /** POST body: the entity without temporary key values. */
   const postBody = (r: Row, data: Data): Data => {
@@ -150,10 +168,10 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
       const res = await f(target, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(clean(body)),
+        body: body === undefined ? undefined : JSON.stringify(outbound(body)),
       });
       if (!res.ok) throw new Error(`rxjs-breeze: ${method} ${target} failed: ${res.status} ${res.statusText}`);
-      finish(done, keyed, r, parse(await res.text()));
+      finish(done, keyed, r, inbound(await res.text()));
     }
     return done;
   };
@@ -176,7 +194,7 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
       }
       const rest: Data = { ...body };
       delete rest[x.fk];
-      body = { ...rest, [`${nav}@odata.bind`]: `$${cid}` };
+      body = { ...rest, [`${n.toServer(nav)}@odata.bind`]: `$${cid}` };
       deps.push(cid);
     }
     return { body, deps };
@@ -198,7 +216,7 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
           method: r.state === 'added' ? 'POST' : 'PATCH',
           url: url(r),
           headers: json,
-          body: clean(body),
+          body: outbound(body),
           dependsOn: deps,
         },
       };
@@ -231,7 +249,7 @@ export const odata = (s: Schema, base: string, opts: ODataOpts = {}): Provider =
     const done: Done = { rows: [], removed: [] };
     steps.forEach((step, i) => {
       const r = byId.get(step.req.id) ?? results[i];
-      finish(done, keyed, step.row, r ? parse(r.body) : null);
+      finish(done, keyed, step.row, r ? inbound(r.body) : null);
     });
     return done;
   };

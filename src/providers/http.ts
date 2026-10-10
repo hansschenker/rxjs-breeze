@@ -2,6 +2,7 @@ import { defer, from, map, type Observable } from 'rxjs';
 import type { Row, Saved } from '../cache';
 import { revive } from '../interp/json';
 import { toOData } from '../interp/odata';
+import { type Naming, renameData, renameQuery, renameRow, same } from '../naming';
 import type { Page, Provider } from '../provider';
 import type { Query } from '../query';
 
@@ -13,6 +14,8 @@ export interface HttpOpts {
   readonly headers?: Readonly<Record<string, string>>;
   /** Fetch implementation; defaults to the global one. */
   readonly fetch?: typeof globalThis.fetch;
+  /** Property-name convention on the wire; defaults to `same`. */
+  readonly naming?: Naming;
 }
 
 /** Parse a JSON body, turning ISO date strings into Dates. */
@@ -49,10 +52,15 @@ export const http = (base: string, opts: HttpOpts = {}): Provider => {
   const f = opts.fetch ?? globalThis.fetch;
   const root = base.replace(/\/+$/, '');
   const headers = { accept: 'application/json', ...opts.headers };
+  const n = opts.naming ?? same;
+  const inbound = renameData(n.toClient);
 
   const query = <T extends object = object>(q: Query<T>): Observable<Page<T>> =>
-    defer(() => from(f(`${root}/${url(q)}`, { headers }).then(body))).pipe(
-      map((raw) => toPage<T>(raw)),
+    defer(() => from(f(`${root}/${url(renameQuery(n.toServer)(q))}`, { headers }).then(body))).pipe(
+      map((raw) => {
+        const p = toPage<T>(raw);
+        return { ...p, rows: p.rows.map((r) => inbound(r) as T) };
+      }),
     );
 
   const save = (rows: readonly Row[]): Observable<Saved> =>
@@ -61,10 +69,15 @@ export const http = (base: string, opts: HttpOpts = {}): Provider => {
         f(`${root}/${opts.savePath ?? 'save'}`, {
           method: 'POST',
           headers: { ...headers, 'content-type': 'application/json' },
-          body: JSON.stringify({ rows }),
+          body: JSON.stringify({ rows: rows.map(renameRow(n.toServer)) }),
         }).then(body),
       ),
-    ).pipe(map((raw) => raw as Saved));
+    ).pipe(
+      map((raw) => {
+        const s = raw as Saved;
+        return { ...s, rows: s.rows.map((x) => ({ ...x, data: inbound(x.data) as object })) };
+      }),
+    );
 
   return { query, save };
 };

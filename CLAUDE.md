@@ -42,6 +42,7 @@ Conventions that are easy to break:
 - Public generics are `T extends object` (plain interfaces must work). Read properties through `props(x)[k]`, never by casting to `any`.
 - A schema type without `key` is a complex (value) type; `props` reference it by name (`'Address'`, `'Phone[]'`), and `schema()` throws on dangling or entity references. Complex values stay inside the parent row: never normalized, merged by `blend` on `patch`, stored whole in `orig`, validated recursively with dotted paths. Structural comparison everywhere goes through `equal` in `src/eq.ts`.
 - `fill` is the cache-side navigation loader; `expand` is the query operator. Don't rename one to the other.
+- Naming conventions (`src/naming.ts`) apply only at the provider boundary: `http`, `odata` and the server's `handle` rename with `renameQuery` / `renameData` / `renameRow`. The schema, store and cache never see server names, and keys containing `@` are never renamed.
 - `select` resolves navigations used by `where`/`order` on the fly and strips them again unless requested by `expand`.
 - Temporary keys are negative numbers (or `tmp_n` for string keys). A provider's save result reports `was` for re-keyed rows; `accept` rewrites foreign keys via `fkRefs(schema)`.
 - Merge strategy `skip` leaves dirty rows out of the returned result, not just unmerged.

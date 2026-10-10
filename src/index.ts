@@ -8,6 +8,7 @@ export { equal } from './eq';
 export { compare, get, run, toFn } from './interp/fn';
 export { toFilter, toOData } from './interp/odata';
 export { fromJson, revive, toJson, toJsonUrl } from './interp/json';
+export * from './naming';
 
 // Validation: rules on the schema, issues derived on demand
 export * from './rules';
