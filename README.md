@@ -88,6 +88,12 @@ To see it against a real datasource, `examples/northwind.mjs` queries the public
 npm run build && npm run example
 ```
 
+The same thing as a web page, with editable cells and the cache and pending changes watched live, is `examples/web`. Vite serves it straight from the TypeScript source:
+
+```bash
+npm run web
+```
+
 Query operators compose with RxJS `pipe` too, since each one is a unary function:
 
 ```ts

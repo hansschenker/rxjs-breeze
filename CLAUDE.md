@@ -14,6 +14,9 @@ npx vitest run test/store.test.ts          # one file
 npx vitest run -t "fixes foreign keys"     # one test by name
 npm run typecheck                          # tsc --noEmit (strict + noUncheckedIndexedAccess)
 npm run build                              # tsup -> dist/index.js + index.d.ts
+npm run example                            # node examples/northwind.mjs against the live Northwind OData service (needs dist)
+npm run example:trippin                    # batched writes against the TripPin sandbox (needs dist)
+npm run web                                # Vite dev server for examples/web, a browser demo importing src/ directly
 ```
 
 Done means typecheck, tests and build all pass. ESM only, npm only (package-lock.json), rxjs is a peer dependency.

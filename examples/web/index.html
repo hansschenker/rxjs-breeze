@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rxjs-breeze in the browser</title>
+    <style>
+      :root { color-scheme: light; font: 14px/1.45 system-ui, sans-serif; color: #1f2328; background: #fafafa; }
+      body { margin: 0 auto; max-width: 1100px; padding: 24px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 24px 0 8px; }
+      h3 { font-size: 14px; margin: 12px 0 6px; }
+      p { margin: 4px 0; }
+      .muted { color: #59636e; }
+      code, pre { font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+      pre { background: #f0f2f4; padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+      form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 8px 0; }
+      label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #59636e; }
+      input, select, button { font: inherit; padding: 4px 6px; border: 1px solid #c9d1d9; border-radius: 4px; background: #fff; }
+      button { cursor: pointer; background: #c2185b; color: #fff; border-color: #c2185b; }
+      button:disabled { opacity: 0.45; cursor: default; }
+      table { border-collapse: collapse; width: 100%; margin: 6px 0; background: #fff; }
+      th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e6e8eb; }
+      th { font-weight: 600; color: #59636e; font-size: 12px; }
+      td input { width: 100%; box-sizing: border-box; }
+      a { color: #c2185b; }
+      .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      ul { margin: 4px 0; padding-left: 18px; }
+      @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <h1>rxjs-breeze in the browser</h1>
+    <p class="muted">
+      One query value, three places it runs: translated to OData for the public Northwind service, merged into the
+      store, and re-run live against the cache while you edit. Northwind is read-only, so there is no save here;
+      <code>examples/trippin.mjs</code> shows writes.
+    </p>
+
+    <h2>1. Query the server</h2>
+    <form id="form">
+      <label>Country <input id="country" value="Germany" /></label>
+      <label>Order by
+        <select id="sort"><option>CompanyName</option><option>City</option><option>CustomerID</option></select>
+      </label>
+      <label>Direction <select id="dir"><option value="asc">asc</option><option value="desc">desc</option></select></label>
+      <label>Take <input id="top" type="number" min="1" max="50" value="5" /></label>
+      <button id="run" type="submit">Run</button>
+    </form>
+    <pre id="url"></pre>
+    <p id="status" class="muted"></p>
+    <div id="customers"></div>
+
+    <h2>2. Expand a navigation</h2>
+    <div id="orders"><p class="muted">Click a company above.</p></div>
+
+    <div class="cols">
+      <div>
+        <h2>3. Watch the cache</h2>
+        <p class="muted">Every customer merged so far, ordered by name, re-rendered whenever the cache changes.</p>
+        <ul id="cache"></ul>
+      </div>
+      <div>
+        <h2>4. Change tracking</h2>
+        <p class="muted">Edit a city in the table above, then press Enter or Tab.</p>
+        <ul id="changes"></ul>
+        <button id="revert" disabled>Revert all</button>
+      </div>
+    </div>
+
+    <script type="module" src="./app.ts"></script>
+  </body>
+</html>
