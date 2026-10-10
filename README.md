@@ -117,6 +117,7 @@ Breeze's vocabulary, and what it became here.
 | `uriBuilder` adapter (`odata`, `json`) | `http(base, { url: toOData })` or a `url` built from `toJson` |
 | `dataService` adapter (`webApi`, `webApiOData`, `mongo`) | `Provider`: `http`, `odata`, `memory`, or your own |
 | OData adapter `$batch` changesets with Content-ID references | `odata(..., { batch: 'multipart' \| 'json' })`, new parents bound with `nav@odata.bind: "$n"` |
+| Server packages (`breeze-sequelize`, `breeze-mongodb`, `Breeze.ContextProvider`) | `serve(provider)` from `rxjs-breeze/server`, with `memory` or your own `Provider` |
 | `ajax` adapter | the `fetch` option of `http` |
 | `modelLibrary` adapter (`ko`, `backbone`, `backingStore`) | RxJS: `store.watch`, `state$`, `changes$` |
 | `EntityManager` | `store` |
@@ -224,13 +225,41 @@ db.save().subscribe({ error: (e) => (isInvalid(e) ? showErrors(e.issues) : rethr
 | Provider | Reads | Writes |
 | --- | --- | --- |
 | `memory(schema, seed)` | compiled-function interpreter over an in-process cache | assigns real keys, fixes foreign keys |
-| `http(base, opts)` | GET by URL, OData by default, any format via `url` | POSTs the whole change set to one `save` endpoint, for a Breeze-style server |
+| `http(base, opts)` | GET by URL, OData by default, the JSON format with `url: toJsonUrl` | POSTs the whole change set to one `save` endpoint, as the reference server expects |
 | `odata(schema, base, { sets, batch })` | GET, OData v4, with type-to-entity-set mapping | `POST` for added rows (parents before the children that reference them), `PATCH` with the changed properties, `DELETE` children first; one request per row, or one atomic `$batch` changeset |
+| `serve(provider)` from `rxjs-breeze/server` | the other side: any provider exposed over HTTP in the JSON format | `POST /save` forwarded to the provider |
 
 `odata` strips temporary keys from `POST` bodies, reads the real key from the response, and rewrites foreign keys of later requests to it. With `batch: 'multipart'` (OData 4.0) or `batch: 'json'` (OData 4.01) a save is one changeset that the server applies completely or not at all; a child of an entity created in the same changeset is bound to it by Content-ID (`"customer@odata.bind": "$1"`), which needs the child's navigation declared in the schema. Without `batch`, requests run one by one and a failure mid-way leaves the earlier ones applied. `examples/trippin.mjs` runs batched create, patch, delete and read-back round trips against the public TripPin sandbox:
 
 ```bash
 npm run build && npm run example:trippin
+```
+
+## Reference JSON server
+
+Any `Provider` can be served over HTTP with the Node-only entry `rxjs-breeze/server`. It speaks the JSON wire format the `http` client provider produces with `url: toJsonUrl`, so a JSON backend needs no OData and no query parser of its own:
+
+```ts
+import { client, http, memory, store, toJsonUrl } from 'rxjs-breeze';
+import { serve } from 'rxjs-breeze/server';
+
+const running = await serve(memory(nw, seed), { port: 3000 }); // any Provider; memory is the reference backend
+const db = client(store(nw), http(running.url, { url: toJsonUrl })); // the client side
+```
+
+| Request | Response |
+| --- | --- |
+| `GET {base}/{Type}?q={toJson(query)}` | `{ rows, count? }` |
+| `GET {base}/{Type}` | every row of `Type` |
+| `POST {base}/query`, body: the query JSON | `{ rows, count? }` |
+| `POST {base}/save`, body: `{ rows: Row[] }` | `{ rows: [{ type, data, was? }], removed: [{ type, key }] }` |
+
+Dates travel as ISO strings and are revived on both sides. Errors are `{ error: { message } }` with 400 for bad input, 404 for unknown routes, 500 otherwise. CORS headers are on by default (`cors: false` turns them off), and `handle(provider)` gives you the request handler without `node:http` for use inside another framework.
+
+To back it with a database, implement the two-method `Provider` against your query builder (an interpreter from `Pred` to a `where` clause is the same visitor shape as `toFilter`) and pass it to `serve`. For prototypes, `persist(file, memoryProvider, schema)` rewrites a JSON file after every save and `load(file)` reads it back as the seed. `examples/json.mjs` runs server and client in one process:
+
+```bash
+npm run build && npm run example:json
 ```
 
 ## Writing a provider
@@ -248,9 +277,9 @@ const mine: Provider = {
 
 ## Scope
 
-In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for Breeze-style servers, and an OData v4 provider that reads and writes, per request or as one atomic `$batch` changeset.
+In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for JSON servers, an OData v4 provider that reads and writes, per request or as one atomic `$batch` changeset, and a reference JSON server that exposes any provider over HTTP.
 
-Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
+Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, and case-insensitive local comparison. Open an issue if one of these matters to you.
 
 ## Acknowledgements
 

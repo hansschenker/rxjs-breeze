@@ -7,7 +7,7 @@ export { equal } from './eq';
 // Interpreters: one query, several executors
 export { compare, get, run, toFn } from './interp/fn';
 export { toFilter, toOData } from './interp/odata';
-export { fromJson, revive, toJson } from './interp/json';
+export { fromJson, revive, toJson, toJsonUrl } from './interp/json';
 
 // Validation: rules on the schema, issues derived on demand
 export * from './rules';

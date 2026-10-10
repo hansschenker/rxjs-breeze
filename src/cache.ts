@@ -285,6 +285,7 @@ const strip = <T extends object>(datas: readonly T[], names: readonly string[]):
 export const select =
   (s: Schema) =>
   <T extends object>(c: Cache, q: Query<T>): T[] => {
+    def(s, q.type);
     const used = navPrefixes(s, q.type, [
       ...(q.where ? paths(q.where) : []),
       ...q.order.map((o) => o.path),

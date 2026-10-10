@@ -9,6 +9,9 @@ export const revive = (_key: string, value: unknown): unknown =>
 /** Serialize a query as JSON: the wire format for JSON-speaking servers. Dates become ISO strings. */
 export const toJson = (q: Query): string => JSON.stringify(q);
 
+/** The URL the reference JSON server answers: `Type?q={toJson(query)}`. Use as `http(base, { url: toJsonUrl })`. */
+export const toJsonUrl = (q: Query): string => `${q.type}?q=${encodeURIComponent(toJson(q))}`;
+
 /** Parse a query from JSON, reviving ISO date strings. */
 export const fromJson = <T = unknown>(text: string): Query<T> => {
   const raw: unknown = JSON.parse(text, revive);
