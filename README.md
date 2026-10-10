@@ -128,6 +128,10 @@ Breeze's vocabulary, and what it became here.
 | `validationErrorsChanged` event | `store.issues$` |
 | `ValidationOptions.validateOnSave` | `client.save(rows, { validate: false })` to skip |
 | `ValidationError` | `Issue`; a refused save errors with `Invalid` (`isInvalid(err)`, `err.issues`) |
+| `ComplexType` | a schema type without `key` |
+| `DataProperty.isComplexProperty` / `isScalar: false` | `props: { address: 'Address' }` / `props: { phones: 'Phone[]' }` |
+| `customer.address.city = 'Bonn'` | `store.patch('Customer', 1, { address: { city: 'Bonn' } })` (merged, not replaced) |
+| `complexAspect.originalValues` | `Row.orig` holds the whole previous complex value |
 
 ## Layers
 
@@ -147,6 +151,27 @@ Rules the code follows:
 - Property paths are `keyof T` with autocomplete, but any dotted string is accepted (`'customer.city'`).
 - Everything in `cache.ts` is a pure function; the store only applies them and emits.
 - Incoming data with nested navigations is normalized into one row per entity. Navigations are filled back in on read along `expand` paths, and resolved on the fly when a filter or ordering uses one.
+
+## Complex types
+
+A schema type without a `key` is a complex type: a value stored inside its parent, with no identity of its own. Reference it by name in `props`, with `[]` for a list:
+
+```ts
+const nw = schema({
+  Customer: {
+    key: 'id',
+    props: { id: 'number', name: 'string', address: 'Address', phones: 'Phone[]' },
+  },
+  Address: { props: { street: 'string', city: 'string', zip: 'string' }, rules: { city: [required()] } },
+  Phone: { props: { kind: 'string', number: 'string' } },
+});
+```
+
+Complex values are never normalized; they travel with their entity. Everything else just works on dotted paths:
+
+- Queries: `where(eq('address.city', 'Berlin'))` runs locally and renders as `address/city eq 'Berlin'` in OData. Lists take `any('phones', starts('number', '+49'))`.
+- Patches merge: `store.patch('Customer', 1, { address: { city: 'Bonn' } })` keeps `street` and `zip`. Lists and dates are replaced whole. `Row.orig` records the whole previous value, so `revert` restores it.
+- Validation recurses: issues come back with paths like `address.city` or `phones.1.number`, and a wrong shape reports `address must be an Address`.
 
 ## Validation
 
@@ -196,9 +221,9 @@ const mine: Provider = {
 
 ## Scope
 
-In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, validation rules with save-time enforcement, an in-memory provider and an OData-flavoured HTTP provider.
+In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider and an OData-flavoured HTTP provider.
 
-Not yet: complex types, inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
+Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
 
 ## Acknowledgements
 

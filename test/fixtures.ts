@@ -4,9 +4,17 @@ import { schema } from '../src/schema';
 export const nw = schema({
   Customer: {
     key: 'id',
-    props: { id: 'number', name: 'string', city: 'string' },
+    props: { id: 'number', name: 'string', city: 'string', address: 'Address', phones: 'Phone[]' },
     navs: { orders: { to: 'Order', fk: 'customerId', many: true } },
     rules: { name: [required(), maxLen(40)], city: [required()] },
+  },
+  Address: {
+    props: { street: 'string', city: 'string', zip: 'string' },
+    rules: { city: [required()] },
+  },
+  Phone: {
+    props: { kind: 'string', number: 'string' },
+    rules: { number: [required()] },
   },
   Order: {
     key: 'id',
@@ -31,10 +39,23 @@ export const nw = schema({
   },
 });
 
+export interface Address {
+  street: string;
+  city: string;
+  zip: string;
+}
+
+export interface Phone {
+  kind: string;
+  number: string;
+}
+
 export interface Customer {
   id: number;
   name: string;
   city: string;
+  address?: Address;
+  phones?: Phone[];
   orders?: Order[];
 }
 

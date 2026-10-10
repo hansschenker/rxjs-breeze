@@ -2,6 +2,9 @@ import type { Rule } from './rules';
 
 export type Kind = 'string' | 'number' | 'boolean' | 'date';
 
+/** A property declaration: a scalar kind, or the name of a complex type (`'Address'`, or `'Phone[]'` for a list). */
+export type Prop = Kind | (string & {});
+
 /**
  * A navigation property. `fk` always names the foreign-key property on the
  * "many" side: for `many: true` it lives on the target type, otherwise on the
@@ -13,9 +16,13 @@ export interface Nav {
   readonly many?: boolean;
 }
 
+/**
+ * An entity type (has a `key`) or a complex type (no key: a value stored
+ * inside its parent entity, with no identity of its own).
+ */
 export interface Type {
-  readonly key: string | readonly string[];
-  readonly props?: Readonly<Record<string, Kind>>;
+  readonly key?: string | readonly string[];
+  readonly props?: Readonly<Record<string, Prop>>;
   readonly navs?: Readonly<Record<string, Nav>>;
   /** Property rules, keyed by property name. */
   readonly rules?: Readonly<Record<string, readonly Rule[]>>;
@@ -25,8 +32,37 @@ export interface Type {
 
 export type Schema = Readonly<Record<string, Type>>;
 
-/** Identity helper that keeps literal types. */
-export const schema = <S extends Schema>(s: S): S => s;
+const KINDS: readonly string[] = ['string', 'number', 'boolean', 'date'];
+export const isKind = (p: string): p is Kind => KINDS.includes(p);
+
+export type PropDef = { readonly kind: Kind } | { readonly complex: string; readonly many: boolean };
+
+/** Resolve a property declaration. */
+export const propDef = (p: Prop): PropDef =>
+  isKind(p)
+    ? { kind: p }
+    : p.endsWith('[]')
+      ? { complex: p.slice(0, -2), many: true }
+      : { complex: p, many: false };
+
+/** Check a schema's references and keep its literal types. */
+export const schema = <S extends Schema>(s: S): S => {
+  for (const [t, d] of Object.entries(s)) {
+    if (d.key === undefined && Object.keys(d.navs ?? {}).length > 0) {
+      throw new Error(`rxjs-breeze: complex type "${t}" cannot have navigations`);
+    }
+    for (const [p, decl] of Object.entries(d.props ?? {})) {
+      const pd = propDef(decl);
+      if ('kind' in pd) continue;
+      const target = s[pd.complex];
+      if (!target) throw new Error(`rxjs-breeze: ${t}.${p} refers to unknown type "${pd.complex}"`);
+      if (target.key !== undefined) {
+        throw new Error(`rxjs-breeze: ${t}.${p} refers to entity type "${pd.complex}"; use navs for entities`);
+      }
+    }
+  }
+  return s;
+};
 
 export type Key = string | number | readonly (string | number)[];
 
@@ -41,8 +77,11 @@ export const def = (s: Schema, name: string): Type => {
   return t;
 };
 
+export const isComplex = (s: Schema, name: string): boolean => def(s, name).key === undefined;
+
 export const keyProps = (s: Schema, name: string): readonly string[] => {
   const k = def(s, name).key;
+  if (k === undefined) throw new Error(`rxjs-breeze: "${name}" is a complex type and has no key`);
   return typeof k === 'string' ? [k] : k;
 };
 
@@ -71,9 +110,10 @@ export const sameKey = (a: Key, b: Key): boolean => keyId(a) === keyId(b);
 export const asKey = (v: unknown): Key | undefined =>
   typeof v === 'string' || typeof v === 'number' ? v : undefined;
 
+/** Kind of the (single) key property; string keys get string temporary keys. */
 export const keyKind = (s: Schema, name: string): Kind => {
   const [first] = keyProps(s, name);
-  return (first && def(s, name).props?.[first]) || 'number';
+  return first !== undefined && def(s, name).props?.[first] === 'string' ? 'string' : 'number';
 };
 
 /** A (type, fk, to) triple: `type` holds a foreign key `fk` pointing at `to`. */

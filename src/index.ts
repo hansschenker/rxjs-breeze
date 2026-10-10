@@ -2,6 +2,7 @@
 export * from './pred';
 export * from './query';
 export * from './schema';
+export { equal } from './eq';
 
 // Interpreters: one query, several executors
 export { compare, get, run, toFn } from './interp/fn';

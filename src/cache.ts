@@ -3,6 +3,7 @@
  * functions from Cache to Cache. Nothing here is stateful or reactive; the
  * store wraps these in a BehaviorSubject.
  */
+import { equal } from './eq';
 import { run } from './interp/fn';
 import { revive } from './interp/json';
 import { paths } from './pred';
@@ -17,6 +18,7 @@ import {
   fkRefs,
   keyId,
   keyOf,
+  propDef,
   props,
   sameKey,
 } from './schema';
@@ -78,30 +80,45 @@ const del = (c: Cache, t: string, key: Key): Cache => {
   return { ...c, [t]: next };
 };
 
-const eqv = (x: unknown, y: unknown): boolean =>
-  Object.is(x, y) || (x instanceof Date && y instanceof Date && x.getTime() === y.getTime());
-
-const same = (a: object, b: object): boolean => {
-  const pa = props(a);
-  const pb = props(b);
-  const ka = Object.keys(pa);
-  return ka.length === Object.keys(pb).length && ka.every((k) => eqv(pa[k], pb[k]));
-};
-
 /** Insert or replace an entity with the given state. */
 export const put =
   (s: Schema) =>
   <T extends object>(c: Cache, t: string, data: T, state: State = 'clean'): Cache =>
     set(c, { type: t, key: keyOf(s, t, data), data, state, orig: null });
 
+/** A partial update of one value: objects may themselves be partial; lists and dates are replaced whole. */
+export type Part<V> = V extends Date | readonly unknown[] ? V : V extends object ? Patch<V> : V;
+
+/** A partial update: complex-typed properties may themselves be partial; lists and dates are replaced whole. */
+export type Patch<T> = { readonly [K in keyof T]?: Part<T[K]> };
+
+const isObj = (v: unknown): v is object =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date);
+
+/** Merge a delta into data, merging declared complex values instead of replacing them. */
+export const blend = (s: Schema, t: string, data: object, delta: object): object => {
+  const out: Data = { ...props(data) };
+  const decl = def(s, t).props ?? {};
+  for (const [k, v] of Object.entries(props(delta))) {
+    const p = decl[k];
+    const pd = p === undefined ? undefined : propDef(p);
+    const cur = out[k];
+    out[k] =
+      pd !== undefined && 'complex' in pd && !pd.many && isObj(v) && isObj(cur)
+        ? blend(s, pd.complex, cur, v)
+        : v;
+  }
+  return out;
+};
+
 /** Apply a partial update, recording original values the first time a property changes. */
 export const patch =
   (s: Schema) =>
-  <T extends object>(c: Cache, t: string, key: Key, delta: Partial<T>): Cache => {
+  <T extends object>(c: Cache, t: string, key: Key, delta: Patch<T>): Cache => {
     const r = row<T>(c, t, key);
     if (!r) throw new Error(`rxjs-breeze: no ${t} with key ${keyId(key)}`);
     if (r.state === 'removed') throw new Error(`rxjs-breeze: ${t} ${keyId(key)} is removed`);
-    const data: T = { ...r.data, ...delta };
+    const data = blend(s, t, r.data, delta) as T;
     if (r.state === 'added') {
       const next = keyOf(s, t, data);
       return set(sameKey(next, r.key) ? c : del(c, t, r.key), { ...r, key: next, data });
@@ -177,7 +194,7 @@ export const merge =
       const key = keyOf(s, t, flat);
       const cur = row<T>(cache, t, key);
       if (!cur || cur.state === 'clean') {
-        const next = cur && same(cur.data, flat) ? cur.data : flat;
+        const next = cur && equal(cur.data, flat) ? cur.data : flat;
         if (!cur || next !== cur.data) {
           cache = set(cache, { type: t, key, data: next, state: 'clean', orig: null });
         }

@@ -2,9 +2,11 @@ import { BehaviorSubject, distinctUntilChanged, map, type Observable } from 'rxj
 import {
   type Cache,
   type Merge,
+  type Patch,
   type Row,
   type Saved,
   accept,
+  blend,
   detach,
   dirty,
   drop,
@@ -19,6 +21,7 @@ import {
   select,
   toSnapshot,
 } from './cache';
+import { equal } from './eq';
 import type { Query } from './query';
 import { type Key, type Schema, hasKey, keyId, keyKind, keyOf, keyProps } from './schema';
 import { type Issue, issues as findIssues } from './validate';
@@ -40,7 +43,8 @@ export interface Store {
   readonly add: <T extends object>(type: string, data: T) => T;
   /** Track an existing entity as clean. */
   readonly attach: <T extends object>(type: string, data: T) => T;
-  readonly patch: <T extends object>(type: string, key: Key, delta: Partial<T>) => T;
+  /** Apply a partial update; complex-typed values are merged, lists and dates replaced. */
+  readonly patch: <T extends object>(type: string, key: Key, delta: Patch<T>) => T;
   readonly remove: (type: string, key: Key) => void;
   readonly detach: (type: string, key: Key) => void;
   /** Run a query against the cache now. */
@@ -67,30 +71,8 @@ export interface Store {
   readonly update: (f: (c: Cache) => Cache) => void;
 }
 
-const shallow = (a: unknown, b: unknown, depth: number): boolean => {
-  if (Object.is(a, b)) return true;
-  if (depth === 0 || typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
-    return false;
-  }
-  if (a instanceof Date || b instanceof Date) {
-    return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
-  }
-  if (Array.isArray(a) || Array.isArray(b)) {
-    return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((x: unknown, i) => shallow(x, b[i], depth - 1))
-    );
-  }
-  const pa = a as Record<string, unknown>;
-  const pb = b as Record<string, unknown>;
-  const ka = Object.keys(pa);
-  return ka.length === Object.keys(pb).length && ka.every((k) => shallow(pa[k], pb[k], depth - 1));
-};
-
 const sameList = (a: readonly unknown[], b: readonly unknown[]): boolean =>
-  a.length === b.length && a.every((x, i) => shallow(x, b[i], 3));
+  a.length === b.length && a.every((x, i) => equal(x, b[i]));
 
 export const store = (s: Schema, init: Cache = empty): Store => {
   const state = new BehaviorSubject<Cache>(init);
@@ -133,10 +115,10 @@ export const store = (s: Schema, init: Cache = empty): Store => {
       update((c) => put(s)(c, t, data, 'clean'));
       return data;
     },
-    patch: <T extends object>(t: string, key: Key, delta: Partial<T>): T => {
+    patch: <T extends object>(t: string, key: Key, delta: Patch<T>): T => {
       const before = row<T>(state.value, t, key);
       if (!before) throw new Error(`rxjs-breeze: no ${t} with key ${keyId(key)}`);
-      const data: T = { ...before.data, ...delta };
+      const data = blend(s, t, before.data, delta) as T;
       update((c) => patch(s)(c, t, key, delta));
       return get<T>(t, keyOf(s, t, data)) ?? data;
     },
