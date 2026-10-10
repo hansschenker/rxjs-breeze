@@ -1,8 +1,9 @@
 // Create, update, read back and delete against the public TripPin service,
 // a writable OData v4 sandbox (each session key gets its own scratch data).
+// Every save goes out as one $batch changeset, so it is applied atomically.
 // Run:  npm run build && node examples/trippin.mjs
 import { firstValueFrom } from 'rxjs';
-import { client, eq, odata, query, schema, store, where } from '../dist/index.js';
+import { client, eq, odata, oneOf, query, schema, store, where } from '../dist/index.js';
 
 const trip = schema({
   People: {
@@ -15,30 +16,32 @@ const trip = schema({
 
 const session = Date.now().toString(36);
 const base = `https://services.odata.org/TripPinRESTierService/(S(rb${session}))`;
-const db = client(store(trip), odata(trip, base));
-const user = `rb${session}`;
+const db = client(store(trip), odata(trip, base, { batch: 'multipart' }));
+const [alice, bob] = [`rba${session}`, `rbb${session}`];
 
-// POST People
+// One $batch with two POSTs
 db.store.add('People', {
-  UserName: user,
+  UserName: alice,
   FirstName: 'Rx',
   LastName: 'Breeze',
-  Emails: [`${user}@example.com`],
+  Emails: [`${alice}@example.com`],
   AddressInfo: [{ Address: '1 Observable Way', City: { Name: 'Zürich', CountryRegion: 'Switzerland', Region: 'ZH' } }],
 });
+db.store.add('People', { UserName: bob, FirstName: 'Bob', LastName: 'Subject', Emails: [] });
 let saved = await firstValueFrom(db.save());
-console.log('created ', saved.rows[0]?.data.UserName, saved.rows[0]?.data.FirstName);
+console.log('created ', saved.rows.map((r) => `${r.data.UserName} (${r.data.FirstName})`).join(', '));
 
-// PATCH People('user') with only the changed property
-db.store.patch('People', user, { FirstName: 'Reactive' });
+// One $batch with a PATCH (only the changed property) and a DELETE
+db.store.patch('People', alice, { FirstName: 'Reactive' });
+db.store.remove('People', bob);
 saved = await firstValueFrom(db.save());
-console.log('patched ', saved.rows[0]?.data.FirstName);
+console.log('patched ', saved.rows[0]?.data.FirstName, '| deleted', saved.removed?.[0]?.key);
 
-// GET People?$filter=UserName eq 'user'   (merged into the cache, complex values intact)
-const [back] = await firstValueFrom(db.fetch(query('People', where(eq('UserName', user))), { merge: 'overwrite' }));
-console.log('fetched ', back?.FirstName, back?.LastName, 'in', back?.AddressInfo?.[0]?.City?.Name);
+// GET People?$filter=(UserName eq 'a' or UserName eq 'b')   (merged into the cache, complex values intact)
+const back = await firstValueFrom(db.fetch(query('People', where(oneOf('UserName', [alice, bob]))), { merge: 'overwrite' }));
+console.log('fetched ', back.map((p) => `${p.FirstName} ${p.LastName} in ${p.AddressInfo?.[0]?.City?.Name ?? '?'}`).join(', '));
 
-// DELETE People('user')
-db.store.remove('People', user);
+// Clean up
+db.store.remove('People', alice);
 saved = await firstValueFrom(db.save());
 console.log('deleted ', saved.removed?.[0]?.key, '| pending changes:', db.store.changes().length);

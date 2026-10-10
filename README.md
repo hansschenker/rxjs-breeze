@@ -110,6 +110,7 @@ Breeze's vocabulary, and what it became here.
 | Predicate visitors (`toJSON`, `toFunction`, `toODataFragment`) | `toJson`, `toFn`, `toFilter` / `toOData` |
 | `uriBuilder` adapter (`odata`, `json`) | `http(base, { url: toOData })` or a `url` built from `toJson` |
 | `dataService` adapter (`webApi`, `webApiOData`, `mongo`) | `Provider`: `http`, `odata`, `memory`, or your own |
+| OData adapter `$batch` changesets with Content-ID references | `odata(..., { batch: 'multipart' \| 'json' })`, new parents bound with `nav@odata.bind: "$n"` |
 | `ajax` adapter | the `fetch` option of `http` |
 | `modelLibrary` adapter (`ko`, `backbone`, `backingStore`) | RxJS: `store.watch`, `state$`, `changes$` |
 | `EntityManager` | `store` |
@@ -218,9 +219,9 @@ db.save().subscribe({ error: (e) => (isInvalid(e) ? showErrors(e.issues) : rethr
 | --- | --- | --- |
 | `memory(schema, seed)` | compiled-function interpreter over an in-process cache | assigns real keys, fixes foreign keys |
 | `http(base, opts)` | GET by URL, OData by default, any format via `url` | POSTs the whole change set to one `save` endpoint, for a Breeze-style server |
-| `odata(schema, base, { sets })` | GET, OData v4, with type-to-entity-set mapping | one request per row: `POST` for added rows (parents before the children that reference them), `PATCH` with the changed properties, `DELETE` children first |
+| `odata(schema, base, { sets, batch })` | GET, OData v4, with type-to-entity-set mapping | `POST` for added rows (parents before the children that reference them), `PATCH` with the changed properties, `DELETE` children first; one request per row, or one atomic `$batch` changeset |
 
-`odata` strips temporary keys from `POST` bodies, reads the real key from the response, and rewrites foreign keys of later requests to it. Requests run one by one, not in a `$batch`, so a failure mid-way leaves the earlier ones applied on the server while the store stays untouched. `examples/trippin.mjs` runs a create, patch, read-back and delete round trip against the public TripPin sandbox:
+`odata` strips temporary keys from `POST` bodies, reads the real key from the response, and rewrites foreign keys of later requests to it. With `batch: 'multipart'` (OData 4.0) or `batch: 'json'` (OData 4.01) a save is one changeset that the server applies completely or not at all; a child of an entity created in the same changeset is bound to it by Content-ID (`"customer@odata.bind": "$1"`), which needs the child's navigation declared in the schema. Without `batch`, requests run one by one and a failure mid-way leaves the earlier ones applied. `examples/trippin.mjs` runs batched create, patch, delete and read-back round trips against the public TripPin sandbox:
 
 ```bash
 npm run build && npm run example:trippin
@@ -241,9 +242,9 @@ const mine: Provider = {
 
 ## Scope
 
-In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for Breeze-style servers, and an OData v4 provider that reads and writes.
+In this version: queries, three interpreters, the identity-map cache with change tracking and live local queries, fetch and merge strategies, temporary keys with foreign-key fix-up, snapshots, complex types, validation rules with save-time enforcement, an in-memory provider, an HTTP provider for Breeze-style servers, and an OData v4 provider that reads and writes, per request or as one atomic `$batch` changeset.
 
-Not yet: OData `$batch` changesets, inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
+Not yet: inheritance, server metadata (`$metadata` or Breeze metadata JSON), naming conventions, case-insensitive local comparison, and a reference server for the JSON wire format. Open an issue if one of these matters to you.
 
 ## Acknowledgements
 
